@@ -1959,7 +1959,7 @@ var tgName = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUn
 var KEY = 'tyaga_v2';
 function blankNutr(){ return { sex:'m', age:'', height:'', weight:'', act:'1.375', no:[] }; }
 function load(){ try { var v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch(e){ return null; } }
-function save(){ S._ts = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} if (typeof cloudQueue === 'function') cloudQueue(); }
+function save(){ S._ts = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} if (typeof cloudQueue === 'function') cloudQueue(); if (typeof syncQueue === 'function') syncQueue(); }
 var S = load() || { profile:null, trialStart:null, premium:false, sessions:[], weights:[], current:null, nutr:blankNutr() };
 ['sessions','weights'].forEach(function(k){ if (!Array.isArray(S[k])) S[k] = []; });
 if (!S.nutr) S.nutr = blankNutr();
@@ -3743,6 +3743,25 @@ layer.addEventListener('change', function(e){
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && SHEET && SHEET.t !== 'consent') { if (SHEET.t === 'warm' || SHEET.t === 'cool') A.runskip(); else { SHEET = null; renderLayer(); } } if (e.key === 'Enter' && e.target && e.target.id === 'cIn' && !e.isComposing) { e.preventDefault(); coachSend(e.target.value); } });
 
 
+/* ---------- Синхронізація з сервером бота (нагадування) ---------- */
+var API_URL = 'https://tyaga-bot.tyagaapp.workers.dev'; // сервер бота в Cloudflare
+var SYNC_T = null;
+function serverSync(){
+  if (!API_URL || !tg || !tg.initData || !S.profile || !S.remind) return;
+  try {
+    var plan = buildPlan(S.profile), nd = plan[nextIdx(plan)] || plan[0];
+    var last = S.sessions.length ? Math.max.apply(null, S.sessions.map(function(x){ return x.date; })) : 0;
+    var tz = 'Europe/Kyiv'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch(e){}
+    var payload = { lang:LANG, tz:tz, sex:S.profile.sex, lastWorkout:last, next:{ title:nd.title, n:nd.items.length }, remind:{ on:S.remind.on, missed:S.remind.missed, time:S.remind.time, days:S.remind.days } };
+    var sig = JSON.stringify(payload), prev = null;
+    try { prev = localStorage.getItem('tyaga_sync'); } catch(e){}
+    if (prev === sig) return;
+    fetch(API_URL.replace(/\/$/, '') + '/api/sync', { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(Object.assign({ initData:tg.initData }, payload)) })
+      .then(function(r){ if (r.ok) { try { localStorage.setItem('tyaga_sync', sig); } catch(e){} } }).catch(function(){});
+  } catch(e){}
+}
+function syncQueue(){ if (!API_URL) return; clearTimeout(SYNC_T); SYNC_T = setTimeout(serverSync, 2500); }
+
 /* ---------- Хмарне сховище Telegram ---------- */
 var CS = (tg && tg.CloudStorage && (!tg.isVersionAtLeast || tg.isVersionAtLeast('6.9'))) ? tg.CloudStorage : null;
 var CLOUD_T = null, CLOUD_N = 0, CHUNK = 3800;
@@ -3801,6 +3820,7 @@ document.addEventListener('visibilitychange', function(){ if (document.hidden &&
 if (S.profile && !S.legal) SHEET = { t:'consent', agree:false };
 render();
 cloudLoad();
+setTimeout(serverSync, 3000);
 })();
 
 </script>
