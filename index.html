@@ -1628,7 +1628,7 @@ var RU = ['Приседания со штангой',
 '3. Зачем',
 'Чтобы составлять программу, сохранять прогресс, считать питание, отправлять напоминания, давать советы ИИ-тренера и предоставлять платную подписку. Мы не продаём твои данные и не используем их для рекламы.',
 '4. Где хранятся данные',
-'В текущей версии данные хранятся в локальном хранилище твоего устройства. В Telegram-версии они также будут храниться на защищённом сервере, чтобы не теряться при смене телефона. Данные хранятся, пока ты пользуешься Приложением или пока не удалишь их.',
+'Данные хранятся в локальном хранилище твоего устройства, а в Telegram-версии — ещё и в облачном хранилище Telegram, привязанном к твоему аккаунту, чтобы не теряться при смене телефона. Данные хранятся, пока ты пользуешься Приложением или пока не удалишь их.',
 '5. Кому передаются',
 'Только поставщикам, без которых Приложение не работает: Telegram (вход, сообщения, оплата звёздами), платёжный сервис WayForPay (оплата картой — данные карты обрабатывает WayForPay, мы их не получаем и не храним), хостинг и сервер, поставщик ИИ-модели (Anthropic) — сообщения тренеру и необходимые данные профиля передаются ему только для формирования ответа. Также — государственным органам в случаях, прямо предусмотренных законом.',
 '6. Куки и локальное хранилище',
@@ -1959,7 +1959,7 @@ var tgName = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUn
 var KEY = 'tyaga_v2';
 function blankNutr(){ return { sex:'m', age:'', height:'', weight:'', act:'1.375', no:[] }; }
 function load(){ try { var v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch(e){ return null; } }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+function save(){ S._ts = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} if (typeof cloudQueue === 'function') cloudQueue(); }
 var S = load() || { profile:null, trialStart:null, premium:false, sessions:[], weights:[], current:null, nutr:blankNutr() };
 ['sessions','weights'].forEach(function(k){ if (!Array.isArray(S[k])) S[k] = []; });
 if (!S.nutr) S.nutr = blankNutr();
@@ -2954,6 +2954,7 @@ function renderFinish(){
 }
 function rr(x, a, b, w, hh, r){ x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + hh, r); x.arcTo(a + w, b + hh, a, b + hh, r); x.arcTo(a, b + hh, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
 function glowAt(x, cx, cy, r, col){ var g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(cx - r, cy - r, r * 2, r * 2); }
+function fitFont(x, text, weight, size, family, maxW, minSize){ x.font = weight + ' ' + size + 'px ' + family; while (size > (minSize || 20) && x.measureText(text).width > maxW) { size -= 2; x.font = weight + ' ' + size + 'px ' + family; } return size; }
 function drawStory(){
   var f = FINISH, s = S.sessions[f.idx], st = sessStats(s), P = STORY[f.style];
   var c = document.createElement('canvas'); c.width = 1080; c.height = 1920; var x = c.getContext('2d');
@@ -2963,8 +2964,8 @@ function drawStory(){
   x.textBaseline = 'alphabetic';
   x.fillStyle = P.ink; x.font = '800 92px ' + D; x.fillText(__(1052,'тяга'), 84, 190); var lw = x.measureText(__(1052,'тяга')).width; x.fillStyle = P.acc; x.fillText('.', 84 + lw, 190);
   x.fillStyle = P.muted; x.font = '700 40px ' + B; x.fillText(fmtDate(s.date), 84, 268);
-  x.fillStyle = P.ink; x.font = '800 118px ' + D; x.fillText(LANG === 'ru' ? 'Тренировка' : __(561,'Тренування'), 80, 500); x.fillText(LANG === 'ru' ? 'завершена' : __(1053,'завершено'), 80, 636);
-  x.fillStyle = P.acc; x.font = '600 54px ' + D; x.fillText(s.title, 84, 742);
+  x.fillStyle = P.ink; var h1a = LANG === 'ru' ? 'Тренировка' : __(561,'Тренування'), h1b = LANG === 'ru' ? 'завершена' : __(1053,'завершено'); var hs = Math.min(fitFont(x, h1a, '800', 118, D, 916, 60), fitFont(x, h1b, '800', 118, D, 916, 60)); x.font = '800 ' + hs + 'px ' + D; x.fillText(h1a, 80, 500); x.fillText(h1b, 80, 500 + Math.round(hs * 1.15));
+  x.fillStyle = P.acc; fitFont(x, s.title, '600', 54, D, 912, 30); x.fillText(s.title, 84, 742);
   var items = [];
   if (f.show.ton) items.push([tonFmt(st.ton), __(1034,'піднято')]);
   if (f.show.time && st.min) items.push([st.min + __(1032,' хв'), __(1054,'тривалість')]);
@@ -2973,8 +2974,8 @@ function drawStory(){
   items.forEach(function(it, i){
     var bx = 80 + i * (bw + gap);
     x.fillStyle = P.box; rr(x, bx, y, bw, 210, 44); x.fill();
-    x.fillStyle = P.ink; x.font = '800 ' + big + 'px ' + D; x.fillText(it[0], bx + 36, y + 116);
-    x.fillStyle = P.muted; x.font = '700 36px ' + B; x.fillText(it[1], bx + 38, y + 172);
+    x.fillStyle = P.ink; fitFont(x, it[0], '800', big, D, bw - 64, 34); x.fillText(it[0], bx + 36, y + 116);
+    x.fillStyle = P.muted; fitFont(x, it[1], '700', 36, B, bw - 66, 22); x.fillText(it[1], bx + 38, y + 172);
   });
   if (items.length) y += 250;
   if (f.show.week) {
@@ -2995,7 +2996,7 @@ function drawStory(){
     f.prs.slice(0, Math.min(3, fit)).forEach(function(e){
       x.fillStyle = P.box; rr(x, 80, y, 920, 106, 34); x.fill();
       x.fillStyle = P.acc; x.beginPath(); x.arc(136, y + 53, 24, 0, Math.PI * 2); x.fill();
-      x.fillStyle = P.ink; x.font = '700 40px ' + B; x.fillText(EX[e.id].n.length > 30 ? EX[e.id].n.slice(0, 29) + '…' : EX[e.id].n, 184, y + 48);
+      x.fillStyle = P.ink; fitFont(x, EX[e.id].n, '700', 40, B, 790, 28); x.fillText(EX[e.id].n, 184, y + 48);
       x.fillStyle = P.muted; x.font = '700 34px ' + B; x.fillText(fmtSet(e.id, e.w, e.r), 184, y + 88);
       y += 122;
     });
@@ -3062,7 +3063,7 @@ var LEGAL = {
     [__(1112,'1. Хто обробляє дані'), [__(1113,'Володілець персональних даних — команда застосунку «тяга». Зв’язатися з нами можна через бот застосунку в Telegram. Ми обробляємо дані відповідно до Закону України «Про захист персональних даних».')]],
     [__(1114,'2. Які дані ми збираємо'), [__(1115,'Дані Telegram: ім’я та ідентифікатор акаунта (у Telegram-версії).'), __(1116,'Дані анкети: стать, ціль, рівень, обладнання, розклад, а також вік, зріст і вага для розрахунку харчування.'), __(1117,'Дані про здоров’я: травми й обмеження, які ти вказуєш. Це чутливі дані — ми обробляємо їх лише з твоєї явної згоди.'), __(1118,'Дані тренувань: підходи, ваги, рекорди, вага тіла, нагороди.'), __(1119,'Повідомлення ШІ-тренеру й факти, які він зберігає в пам’яті.')]],
     [__(1120,'3. Навіщо'), [__(1121,'Щоб складати програму, зберігати прогрес, рахувати харчування, надсилати нагадування, давати поради ШІ-тренера й надавати платну підписку. Ми не продаємо твої дані й не використовуємо їх для реклами.')]],
-    [__(1122,'4. Де зберігаються дані'), [__(1123,'У поточній версії дані зберігаються в локальному сховищі твого пристрою. У Telegram-версії вони також зберігатимуться на захищеному сервері, щоб не губитися при зміні телефона. Дані зберігаються, доки ти користуєшся Застосунком або доки не видалиш їх.')]],
+    [__(1122,'4. Де зберігаються дані'), [__(1123,'Дані зберігаються в локальному сховищі твого пристрою, а в Telegram-версії — ще й у хмарному сховищі Telegram, прив’язаному до твого акаунта, щоб не губитися при зміні телефона. Дані зберігаються, доки ти користуєшся Застосунком або доки не видалиш їх.')]],
     [__(1124,'5. Кому передаються'), [__(1125,'Лише постачальникам, без яких Застосунок не працює: Telegram (вхід, повідомлення, оплата зірками), платіжний сервіс WayForPay (оплата карткою — дані картки обробляє WayForPay, ми їх не отримуємо й не зберігаємо), хостинг і сервер, постачальник ШІ-моделі (Anthropic) — повідомлення тренеру й необхідні дані профілю передаються йому тільки для формування відповіді. Також — державним органам у випадках, прямо передбачених законом.')]],
     [__(1126,'6. Кукі й локальне сховище'), [__(1127,'Ми не використовуємо рекламні чи аналітичні файли cookie й не відстежуємо тебе на інших сайтах.'), __(1128,'Застосунок використовує локальне сховище браузера (localStorage) — технічно необхідну технологію, схожу на cookie, щоб зберігати твою програму, тренування й налаштування на пристрої. Без нього Застосунок не працюватиме.'), __(1129,'Шрифти завантажуються з сервісу Google Fonts, тому Google може отримати твою IP-адресу під час завантаження сторінки.')]],
     [__(1130,'7. Твої права'), [__(1131,'Ти можеш дізнатися, які дані ми маємо, виправити їх, вимагати видалення чи відкликати згоду. Видалити всі дані з пристрою можна будь-коли: Профіль → «Видалити всі дані». Щодо даних на сервері — напиши нам через бот застосунку. Ти також маєш право звернутися до Уповноваженого Верховної Ради України з прав людини.')]],
@@ -3710,7 +3711,7 @@ var A = {
   },
   endtrial:function(){ S.trialStart = Date.now() - 8 * DAY; S.premium = false; save(); SHEET = null; ANIM = false; render(); toast(__(1425,'Безкоштовний період завершено')); },
   reset:function(){ SHEET = { t:'confirmreset' }; renderLayer(); },
-  doreset:function(){ try { localStorage.removeItem(KEY); } catch(e){} S = { profile:null, trialStart:null, premium:false, sessions:[], weights:[], current:null, nutr:blankNutr(), swaps:{}, chat:[], memory:[], medalsSeen:{} }; migrate(); FINISH = null; COACH = false; SHEET = null; OB = { step:-1, data:{} }; stopRest(); render(); }
+  doreset:function(){ try { localStorage.removeItem(KEY); } catch(e){} cloudWipe(); S = { profile:null, trialStart:null, premium:false, sessions:[], weights:[], current:null, nutr:blankNutr(), swaps:{}, chat:[], memory:[], medalsSeen:{} }; migrate(); FINISH = null; COACH = false; SHEET = null; OB = { step:-1, data:{} }; stopRest(); render(); }
 };
 
 function onClick(e){
@@ -3741,8 +3742,65 @@ layer.addEventListener('change', function(e){
 });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && SHEET && SHEET.t !== 'consent') { if (SHEET.t === 'warm' || SHEET.t === 'cool') A.runskip(); else { SHEET = null; renderLayer(); } } if (e.key === 'Enter' && e.target && e.target.id === 'cIn' && !e.isComposing) { e.preventDefault(); coachSend(e.target.value); } });
 
+
+/* ---------- Хмарне сховище Telegram ---------- */
+var CS = (tg && tg.CloudStorage && (!tg.isVersionAtLeast || tg.isVersionAtLeast('6.9'))) ? tg.CloudStorage : null;
+var CLOUD_T = null, CLOUD_N = 0, CHUNK = 3800;
+function cloudOK(){ return !!CS; }
+function cloudSaveNow(){
+  if (!CS) return;
+  try {
+    var data = JSON.stringify(S), parts = [];
+    for (var i = 0; i < data.length; i += CHUNK) parts.push(data.slice(i, i + CHUNK));
+    var left = parts.length, prevN = CLOUD_N;
+    parts.forEach(function(p, i){
+      CS.setItem('st_' + i, p, function(err){
+        if (--left === 0 && !err) {
+          CS.setItem('meta', JSON.stringify({ n:parts.length, ts:S._ts || Date.now() }), function(){});
+          if (prevN > parts.length) { var old = []; for (var k = parts.length; k < prevN; k++) old.push('st_' + k); CS.removeItems(old, function(){}); }
+          CLOUD_N = parts.length;
+        }
+      });
+    });
+  } catch(e){}
+}
+function cloudQueue(){ if (!CS) return; clearTimeout(CLOUD_T); CLOUD_T = setTimeout(cloudSaveNow, 1500); }
+function cloudWipe(){ if (!CS) return; try { CS.getKeys(function(err, keys){ if (!err && keys && keys.length) CS.removeItems(keys, function(){}); }); } catch(e){} CLOUD_N = 0; }
+function normalizeState(){
+  ['sessions','weights'].forEach(function(k){ if (!Array.isArray(S[k])) S[k] = []; });
+  if (!S.nutr) S.nutr = blankNutr(); if (!S.nutr.no) S.nutr.no = [];
+  ['swaps','medalsSeen'].forEach(function(k){ if (!S[k]) S[k] = {}; });
+  ['chat','memory'].forEach(function(k){ if (!Array.isArray(S[k])) S[k] = []; });
+  migrate();
+}
+function cloudLoad(){
+  if (!CS) return;
+  try {
+    CS.getItem('meta', function(err, v){
+      if (err) return;
+      var m = null; try { m = v ? JSON.parse(v) : null; } catch(e){}
+      if (!m || !m.n) { if (S.profile) cloudSaveNow(); return; }
+      CLOUD_N = m.n;
+      if ((m.ts || 0) <= (S._ts || 0)) { if ((m.ts || 0) < (S._ts || 0)) cloudSaveNow(); return; }
+      var keys = []; for (var i = 0; i < m.n; i++) keys.push('st_' + i);
+      CS.getItems(keys, function(err2, vals){
+        if (err2 || !vals) return;
+        var str = keys.map(function(k){ return vals[k] || ''; }).join('');
+        var obj; try { obj = JSON.parse(str); } catch(e){ return; }
+        if (!obj || typeof obj !== 'object') return;
+        S = obj; normalizeState();
+        try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+        if (S.profile && !S.legal) SHEET = { t:'consent', agree:false };
+        OB = { step:-1, data:{} }; render();
+        toast(LANG === 'ru' ? 'Прогресс восстановлен из Telegram' : 'Прогрес відновлено з Telegram');
+      });
+    });
+  } catch(e){}
+}
+document.addEventListener('visibilitychange', function(){ if (document.hidden && CLOUD_T) { clearTimeout(CLOUD_T); CLOUD_T = null; cloudSaveNow(); } });
 if (S.profile && !S.legal) SHEET = { t:'consent', agree:false };
 render();
+cloudLoad();
 })();
 
 </script>
