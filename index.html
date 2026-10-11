@@ -3754,7 +3754,7 @@ function serverSync(){
     var plan = buildPlan(S.profile), nd = plan[nextIdx(plan)] || plan[0];
     var last = S.sessions.length ? Math.max.apply(null, S.sessions.map(function(x){ return x.date; })) : 0;
     var tz = 'Europe/Kyiv'; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch(e){}
-    var payload = { lang:LANG, tz:tz, sex:S.profile.sex, lastWorkout:last, next:{ title:nd.title, n:nd.items.length }, remind:{ on:S.remind.on, missed:S.remind.missed, time:S.remind.time, days:S.remind.days } };
+    var payload = { lang:LANG, tz:tz, sex:S.profile.sex, lastWorkout:last, sessions:S.sessions.length, open:new Date().toISOString().slice(0, 10), next:{ title:nd.title, n:nd.items.length }, remind:{ on:S.remind.on, missed:S.remind.missed, time:S.remind.time, days:S.remind.days } };
     var sig = JSON.stringify(payload), prev = null;
     try { prev = localStorage.getItem('tyaga_sync'); } catch(e){}
     if (prev === sig) return;
