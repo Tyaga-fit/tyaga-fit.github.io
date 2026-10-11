@@ -33,7 +33,9 @@
     --hero-a:#3A2A60; --hero-b:#1B1430; --dock:rgba(33,26,52,.94); --glow:.18;
 }
 *,*::before,*::after{box-sizing:inherit}
-html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body,button,input,select,a,label{touch-action:manipulation}
+button{-webkit-tap-highlight-color:transparent}
 body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;
   background:
@@ -1941,17 +1943,7 @@ function langSwitch(row){
 
 /* ---------- Telegram (працює тільки всередині Telegram) ---------- */
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
-if (tg) {
-  try { tg.ready(); tg.expand(); } catch(e){}
-  try {
-    var tgDark = tg.colorScheme ? tg.colorScheme === 'dark' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.setAttribute('data-theme', tgDark ? 'dark' : 'light');
-    var tgBg = tgDark ? '#15111F' : '#F2ECE3';
-    if (tg.setHeaderColor) tg.setHeaderColor(tgBg);
-    if (tg.setBackgroundColor) tg.setBackgroundColor(tgBg);
-    if (tg.setBottomBarColor) tg.setBottomBarColor(tgBg);
-  } catch(e){}
-}
+if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
 function haptic(kind){ try { if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(kind || 'light'); } catch(e){} }
 var tgName = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) || '';
 
@@ -3522,7 +3514,7 @@ function renderLayer(){
   } else if (SHEET.t === 'storyimg') {
     body = __(1372,'<h2>Твоя карточка</h2><p class="muted" style="margin:0 0 12px">Утримуй зображення, щоб зберегти, і додай у сторіс.</p><img src="') + SHEET.src + __(1373,'" alt="Карточка тренування" style="width:100%;border-radius:18px;display:block"><button class="btn btn-ghost" data-a="close" style="margin-top:14px">Готово</button>');
   } else if (SHEET.t === 'more') {
-    body = __(1374,'<h2>Ще</h2>') + langSwitch(true) + [['prog', IC.prog, __(1070,'Прогрес'), __(1375,'Вага тіла, історія тренувань')], ['food', IC.food, __(562,'Харчування'), __(1376,'Калорії, БЖВ і раціон')], ['facts', IC.facts, __(1071,'Цікаве'), __(1377,'Факти про тренування й здоров’я')]].map(function(x){
+    body = __(1374,'<h2>Ще</h2>') + langSwitch(true) + themeRow() + [['prog', IC.prog, __(1070,'Прогрес'), __(1375,'Вага тіла, історія тренувань')], ['food', IC.food, __(562,'Харчування'), __(1376,'Калорії, БЖВ і раціон')], ['facts', IC.facts, __(1071,'Цікаве'), __(1377,'Факти про тренування й здоров’я')]].map(function(x){
       return '<button class="more-row" data-a="moretab" data-v="' + x[0] + '"><i>' + x[1] + '</i><span><b>' + x[2] + '</b><span>' + x[3] + '</span></span></button>';
     }).join('') + '<button class="more-row" data-a="remind"><i>' + IC.flame + __(1378,'</i><span><b>Нагадування</b><span>Дні й час тренувань</span></span></button>') +
       '<button class="more-row" data-a="docs"><i>' + IC.facts + __(1379,'</i><span><b>Документи</b><span>Умови використання й конфіденційність</span></span></button>') +
@@ -3672,6 +3664,7 @@ var A = {
   docs:function(){ SHEET = { t:'docs' }; renderLayer(); },
   consenttoggle:function(){ SHEET.agree = !SHEET.agree; haptic(); renderLayer(); },
   consentok:function(){ if (!SHEET.agree) { toast(__(1421,'Познач згоду, щоб продовжити')); return; } S.legal = { v:LEGAL_V, at:Date.now() }; save(); SHEET = null; renderLayer(); },
+  theme:function(t){ THEME = t.dataset.v; try { localStorage.setItem('tyaga_theme', THEME); } catch(e){} applyTheme(); haptic(); renderLayer(); },
   more:function(){ SHEET = { t:'more' }; renderLayer(); },
   moretab:function(t){ SHEET = null; TAB = t.dataset.v; window.scrollTo(0, 0); render(); },
   storystyle:function(t){ FINISH.style = t.dataset.v; document.querySelectorAll('[data-a="storystyle"]').forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.v === FINISH.style)); }); updateStory(); },
@@ -3828,6 +3821,19 @@ function serverCoach(msg, ctl){
   }
   return step();
 }
+var THEME = (function(){ try { var t = localStorage.getItem('tyaga_theme'); return t === 'dark' || t === 'light' ? t : 'auto'; } catch(e){ return 'auto'; } })();
+function applyTheme(){
+  var dark;
+  if (THEME === 'dark') dark = true;
+  else if (THEME === 'light') dark = false;
+  else dark = (tg && tg.colorScheme) ? tg.colorScheme === 'dark' : !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  if (tg) { var bg = dark ? '#15111F' : '#F2ECE3'; try { if (tg.setHeaderColor) tg.setHeaderColor(bg); if (tg.setBackgroundColor) tg.setBackgroundColor(bg); if (tg.setBottomBarColor) tg.setBottomBarColor(bg); } catch(e){} }
+}
+function themeRow(){
+  var o = [['auto', tg ? T2('Як у Telegram', 'Как в Telegram') : T2('Авто', 'Авто')], ['dark', T2('Темна', 'Тёмная')], ['light', T2('Світла', 'Светлая')]];
+  return '<div class="lang-row"><span>' + T2('Тема', 'Тема') + '</span><div class="lang-sw" role="group" aria-label="' + T2('Тема', 'Тема') + '">' + o.map(function(x){ return '<button data-a="theme" data-v="' + x[0] + '" aria-pressed="' + (THEME === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div></div>';
+}
 function syncQueue(){ if (!API_URL) return; clearTimeout(SYNC_T); SYNC_T = setTimeout(serverSync, 2500); }
 
 /* ---------- Хмарне сховище Telegram ---------- */
@@ -3886,6 +3892,9 @@ function cloudLoad(){
 }
 document.addEventListener('visibilitychange', function(){ if (document.hidden && CLOUD_T) { clearTimeout(CLOUD_T); CLOUD_T = null; cloudSaveNow(); } });
 if (S.profile && !S.legal) SHEET = { t:'consent', agree:false };
+applyTheme();
+try { if (tg && tg.onEvent) tg.onEvent('themeChanged', function(){ if (THEME === 'auto') applyTheme(); }); } catch(e){}
+try { if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){ if (THEME === 'auto') applyTheme(); }); } catch(e){}
 render();
 cloudLoad();
 setTimeout(serverSync, 3000);
