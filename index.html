@@ -2650,7 +2650,7 @@ function renderCoach(){
   S.chat.forEach(function(m, i){
     if (m.role === 'note') { h += '<div class="mnote">' + esc(m.content) + '</div>'; return; }
     var live = BUSY && i === S.chat.length - 1 && m.role === 'assistant';
-    h += '<div class="msg ' + (m.role === 'user' ? 'me' : 'ai') + (m.err ? ' err' : '') + '"' + (live ? ' id="live"' : '') + '>' + (m.content ? fmtMsg(m.content) : '<span class="typing"><i></i><i></i><i></i></span>') + '</div>';
+    h += '<div class="msg ' + (m.role === 'user' ? 'me' : 'ai') + (m.err && !m.soon ? ' err' : '') + '"' + (live ? ' id="live"' : '') + '>' + (m.content ? fmtMsg(m.content) : '<span class="typing"><i></i><i></i><i></i></span>') + '</div>';
   });
   h += '</div>';
   if (SAMPLE === null && !coachAvailable()) {
@@ -2692,7 +2692,8 @@ function coachSend(text){
     msg.content = res.text + (res.truncated ? __(924,'\n\n(Відповідь обрізано — спитай коротше.)') : '');
   }, function(e){
     var code = e && e.code;
-    if (code === 'cancelled') { msg.content = (e.text || '') || __(925,'Зупинено.'); }
+    if (code === 'off') { msg.content = T2('ШІ-тренер запрацює зовсім скоро — ми вже його налаштовуємо. А поки тренуйся за програмою 💪', 'ИИ-тренер заработает совсем скоро — мы уже его настраиваем. А пока тренируйся по программе 💪'); msg.err = true; msg.soon = true; if (S.chatDay && S.chatDay.n > 0) S.chatDay.n--; }
+    else if (code === 'cancelled') { msg.content = (e.text || '') || __(925,'Зупинено.'); }
     else if (['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed'].indexOf(code) > -1) { msg.content = __(926,'ШІ-тренер недоступний: потрібен дозвіл на використання Claude.'); msg.err = true; }
     else if (code === 'rate_limited') { msg.content = (e.text ? e.text + '\n\n' : '') + __(927,'Забагато запитів. Спробуй трохи пізніше.'); msg.err = !e.text; }
     else if (code === 'refused') { msg.content = __(928,'На це питання я не відповім. Спитай про тренування, техніку чи харчування.'); msg.err = true; }
@@ -3802,7 +3803,7 @@ function serverCoach(msg, ctl){
   function step(){
     return apiPost('/api/coach', { system:system, messages:messages, tools:defs }, ctl.signal).then(function(r){
       var d = r.data;
-      if (!r.ok || !d || !d.ok) { var e = new Error('coach'); e.code = (d && d.error === 'limit') ? 'rate_limited' : 'server'; throw e; }
+      if (!r.ok || !d || !d.ok) { var e = new Error('coach'); e.code = (d && d.error === 'limit') ? 'rate_limited' : ((d && d.error === 'off') ? 'off' : 'server'); throw e; }
       var text = (d.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('\n').trim();
       if (text) { msg.content = text; var el = document.getElementById('live'); if (el) el.innerHTML = fmtMsg(text); scrollChat(); }
       if (d.stop_reason !== 'tool_use' || ++round >= 4) return { text:msg.content || text || '' };
