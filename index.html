@@ -1608,7 +1608,7 @@ var RU = ['Приседания со штангой',
 'Мы не гарантируем бесперебойную работу Приложения и достижение конкретных результатов, ведь они зависят от многих индивидуальных факторов.',
 'Ничто в этих Условиях не ограничивает прав потребителя, которые не могут быть ограничены согласно законодательству Украины.',
 '7. Подписка и оплата',
-'После пробного периода (7 дней) полный доступ предоставляется по платной подписке. Доступны тарифы на 1, 3, 6 и 12 месяцев по ценам, указанным в Приложении на момент покупки. Оплата осуществляется банковской картой через платёжный сервис WayForPay или звёздами Telegram (Telegram Stars). Подписка продлевается автоматически: следующее списание происходит один раз в конце оплаченного периода в размере стоимости выбранного тарифа. Автопродление можно отменить в любой момент; доступ сохраняется до конца оплаченного периода. Возврат средств — в соответствии с законодательством Украины и правилами платёжного сервиса.',
+'После пробного периода (7 дней) полный доступ предоставляется по платной подписке. Доступны тарифы на 1, 3, 6 и 12 месяцев по ценам, указанным в Приложении на момент покупки. Оплата осуществляется банковской картой через платёжный сервис WayForPay или звёздами Telegram (Telegram Stars). Подписка, оплаченная картой, продлевается автоматически: следующее списание происходит один раз в конце оплаченного периода в размере стоимости выбранного тарифа; автопродление можно отменить в любой момент. Оплата звёздами Telegram — разовая, без автопродления. В обоих случаях доступ сохраняется до конца оплаченного периода. Возврат средств — в соответствии с законодательством Украины и правилами платёжного сервиса.',
 '8. Интеллектуальная собственность',
 'Программы, тексты, дизайн, графика и название «тяга» принадлежат Нам. Их запрещено копировать, продавать или распространять без письменного разрешения.',
 '9. Запрещённое использование',
@@ -2423,7 +2423,8 @@ function fmtDate(t){ return new Date(t).toLocaleDateString(LOCALE, { day:'numeri
 function doy(){ var n = new Date(), s = new Date(n.getFullYear(), 0, 0); return Math.floor((n - s) / DAY); }
 function plural(n, a, b, c){ if (LANG === 'ru' && a === b && a === 'тренировки') a = 'тренировка'; var m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
 function trialLeft(){ if (!S.trialStart) return 7; return Math.max(0, 7 - Math.floor((Date.now() - S.trialStart) / DAY)); }
-function hasAccess(){ return S.premium || trialLeft() > 0; }
+function premiumOn(){ return !!S.premium && (!S.premiumUntil || S.premiumUntil > Date.now()); }
+function hasAccess(){ return premiumOn() || trialLeft() > 0; }
 function thisWeek(){ var ws = weekStart(Date.now()); return S.sessions.filter(function(s){ return s.date >= ws; }).length; }
 function nextIdx(plan){ return S.sessions.length % plan.length; }
 function toast(msg){
@@ -2660,7 +2661,7 @@ function renderCoach(){
     h += '<div class="msg ' + (m.role === 'user' ? 'me' : 'ai') + (m.err ? ' err' : '') + '"' + (live ? ' id="live"' : '') + '>' + (m.content ? fmtMsg(m.content) : '<span class="typing"><i></i><i></i><i></i></span>') + '</div>';
   });
   h += '</div>';
-  if (SAMPLE === null) {
+  if (SAMPLE === null && !coachAvailable()) {
     h += __(916,'<div class="coach-off glass"><b>ШІ-тренер недоступний тут</b><span>У цій версії тренер працює всередині Claude. У Telegram-версії він працюватиме через наш сервер.</span></div>');
   } else {
     var left = Math.max(0, CHAT_LIMIT - chatUsedToday());
@@ -2677,7 +2678,7 @@ function scrollChat(){ setTimeout(function(){ window.scrollTo(0, document.body.s
 
 function coachSend(text){
   text = String(text || '').trim();
-  if (!text || BUSY || !SAMPLE) return;
+  if (!text || BUSY || !coachAvailable()) return;
   if (chatUsedToday() >= CHAT_LIMIT) { toast(__(923,'Ліміт повідомлень на сьогодні вичерпано')); return; }
   S.chatDay.n++;
   S.chat.push({ role:'user', content:text });
@@ -2694,8 +2695,8 @@ function coachSend(text){
     if (useTools) opts.tools = coachTools();
     return SAMPLE(turns, opts);
   };
-  var limitsP = (SAMPLE.limits ? SAMPLE.limits().catch(function(){ return null; }) : Promise.resolve(null));
-  limitsP.then(function(lim){ return run(!!(lim && lim.tools)); }).then(function(res){
+  var p = SAMPLE ? (SAMPLE.limits ? SAMPLE.limits().catch(function(){ return null; }) : Promise.resolve(null)).then(function(lim){ return run(!!(lim && lim.tools)); }) : serverCoach(msg, ctl);
+  p.then(function(res){
     msg.content = res.text + (res.truncated ? __(924,'\n\n(Відповідь обрізано — спитай коротше.)') : '');
   }, function(e){
     var code = e && e.code;
@@ -3054,7 +3055,7 @@ var LEGAL = {
     [__(1094,'4. ШІ-тренер'), [__(1095,'Відповіді ШІ-тренера генеруються автоматично штучним інтелектом і можуть бути неточними або неповними. Вони мають загальний інформаційний характер і не є медичною, дієтологічною чи іншою професійною порадою. Не покладайся на них у питаннях здоров’я.')]],
     [__(1096,'5. Харчування'), [__(1097,'Розрахунки калорій і макроелементів орієнтовні й базуються на загальних формулах. Вони не призначені для людей із розладами харчової поведінки, вагітних і тих, хто годує грудьми, а також для людей із захворюваннями, що потребують лікувального харчування, — у цих випадках звернися до лікаря.')]],
     [__(1098,'6. Обмеження відповідальності'), [__(1099,'Застосунок надається «як є». У межах, дозволених чинним законодавством України, Ми не несемо відповідальності за травми, погіршення здоров’я, матеріальну чи іншу шкоду, що виникли внаслідок виконання вправ, застосування рекомендацій чи розрахунків Застосунку або ШІ-тренера, неправильної техніки чи ігнорування попереджень.'), __(1100,'Ми не гарантуємо безперервну роботу Застосунку й досягнення конкретних результатів, адже вони залежать від багатьох індивідуальних чинників.'), __(1101,'Ніщо в цих Умовах не обмежує прав споживача, які не можуть бути обмежені згідно із законодавством України.')]],
-    [__(1102,'7. Підписка й оплата'), [__(1103,'Після пробного періоду (7 днів) повний доступ надається за платною підпискою. Доступні тарифи на 1, 3, 6 і 12 місяців за цінами, вказаними в Застосунку на момент покупки. Оплата здійснюється банківською карткою через платіжний сервіс WayForPay або зірками Telegram (Telegram Stars). Підписка продовжується автоматично: наступне списання відбувається один раз наприкінці оплаченого періоду в розмірі вартості обраного тарифу. Автопродовження можна скасувати будь-коли; доступ зберігається до кінця оплаченого періоду. Повернення коштів — відповідно до законодавства України та правил платіжного сервісу.')]],
+    [__(1102,'7. Підписка й оплата'), [__(1103,'Після пробного періоду (7 днів) повний доступ надається за платною підпискою. Доступні тарифи на 1, 3, 6 і 12 місяців за цінами, вказаними в Застосунку на момент покупки. Оплата здійснюється банківською карткою через платіжний сервіс WayForPay або зірками Telegram (Telegram Stars). Підписка, оплачена карткою, продовжується автоматично: наступне списання відбувається один раз наприкінці оплаченого періоду в розмірі вартості обраного тарифу; автопродовження можна скасувати будь-коли. Оплата зірками Telegram — разова, без автопродовження. В обох випадках доступ зберігається до кінця оплаченого періоду. Повернення коштів — відповідно до законодавства України та правил платіжного сервісу.')]],
     [__(1104,'8. Інтелектуальна власність'), [__(1105,'Програми, тексти, дизайн, графіка й назва «тяга» належать Нам. Їх заборонено копіювати, продавати чи поширювати без письмового дозволу.')]],
     [__(1106,'9. Заборонене використання'), [__(1107,'Заборонено втручатися в роботу Застосунку, обходити оплату чи обмеження, використовувати ШІ-тренера для незаконних або шкідливих цілей.')]],
     [__(1108,'10. Зміни й контакти'), [__(1109,'Ми можемо змінювати ці Умови; про суттєві зміни повідомимо в Застосунку. Подальше користування означає згоду з новою редакцією.'), __(1110,'Питання й претензії надсилай нам через бот застосунку в Telegram.')]]
@@ -3130,7 +3131,7 @@ function renderHome(){
   var headline = done >= target ? __(1150,'Тиждень закрито. Ти машина')
     : (plannedToday() && !doneToday() ? __(1151,'Сьогодні тренування о ') + S.remind.time
     : (done === 0 ? __(1152,'Новий тиждень — нові диски') : __(1153,'Ще ') + (target - done) + ' ' + plural(target - done, __(1154,'тренування'), __(1154,'тренування'), __(1155,'тренувань')) + __(1156,' до цілі')));
-  var trial = S.premium ? '' : '<div class="trial"><span>' + trialText() + __(1157,'</span><button data-a="paywall">Підписка</button></div>');
+  var trial = premiumOn() ? '' : '<div class="trial"><span>' + trialText() + __(1157,'</span><button data-a="paywall">Підписка</button></div>');
 
   var h = '<div class="top"><div><div class="date">' + dateStr + '</div><div class="hello">' + hello + '</div></div>' + avatar() + '</div>';
 
@@ -3526,7 +3527,7 @@ function renderLayer(){
     }).join('') + '<button class="more-row" data-a="remind"><i>' + IC.flame + __(1378,'</i><span><b>Нагадування</b><span>Дні й час тренувань</span></span></button>') +
       '<button class="more-row" data-a="docs"><i>' + IC.facts + __(1379,'</i><span><b>Документи</b><span>Умови використання й конфіденційність</span></span></button>') +
       '<button class="more-row" data-a="tour"><i>' + IC.facts + __(1380,'</i><span><b>Як користуватися</b><span>Коротке навчання за хвилину</span></span></button>') +
-      '<button class="more-row" data-a="settings"><i>' + IC.home + __(1381,'</i><span><b>Профіль і підписка</b><span>') + (S.premium ? __(1382,'Підписка активна') + (S.premiumUntil ? __(1015,' до ') + fmtDate(S.premiumUntil) : '') : trialText()) + '</span></span></button>';
+      '<button class="more-row" data-a="settings"><i>' + IC.home + __(1381,'</i><span><b>Профіль і підписка</b><span>') + (premiumOn() ? __(1382,'Підписка активна') + (S.premiumUntil ? __(1015,' до ') + fmtDate(S.premiumUntil) : '') : trialText()) + '</span></span></button>';
   } else if (SHEET.t === 'inj') {
     var pi = S.profile.inj;
     body = __(1383,'<h2>Травми й обмеження</h2><p class="muted" style="margin:0 0 14px">Відміть, що турбує, і програма прибере вправи, які навантажують це місце. Це не замінює консультацію лікаря.</p><div class="toggles big">') +
@@ -3550,18 +3551,24 @@ function renderLayer(){
           '<b>' + p.n + '</b>' + (p.months > 1 ? '<span class="per">≈ ' + per + __(1394,' грн / міс</span>') : '<span class="per">&nbsp;</span>') +
           '<span class="tp">' + p.price.toLocaleString(LOCALE) + __(1395,' <small>грн</small></span>') + (save > 0 ? '<span class="save">−' + save + '%</span>' : '') + '</button>';
       }).join('') + '</div>' +
+      ((PAY_LINKS[sel] || !tgPayOK()) ? (
       __(1396,'<button class="btn btn-main" data-a="buy" style="margin-top:14px">Оплатити ') + sp.price.toLocaleString(LOCALE) + __(1397,' грн карткою</button>') +
       __(1398,'<button class="btn" data-a="buystars" style="margin-top:6px;color:var(--muted);font-size:14px">або зірками Telegram — ') + sp.stars + ' ⭐</button>' +
       '<p class="muted small" style="text-align:center;margin:10px 0 0">' + (sp.months === 1 ? __(1399,'Підписка продовжується автоматично щомісяця') : __(1400,'Підписка продовжується автоматично раз на ') + sp.n) + __(1401,'. Скасувати можна будь-коли в профілі. Оплата карткою — через захищену сторінку WayForPay.</p>') +
-      __(1402,'<p class="muted small" style="text-align:center;margin:6px 0 0;opacity:.75">Демо-версія: гроші не списуються, підписка активується одразу.</p>');
+      (tg ? '' : __(1402,'<p class="muted small" style="text-align:center;margin:6px 0 0;opacity:.75">Демо-версія: гроші не списуються, підписка активується одразу.</p>'))
+      ) : (
+      '<button class="btn btn-main" data-a="buystars" style="margin-top:14px">' + T2('Оплатити ', 'Оплатить ') + sp.stars + ' ⭐ ' + T2('у Telegram', 'в Telegram') + '</button>' +
+      '<p class="muted small" style="text-align:center;margin:10px 0 0">' + T2('≈ ' + sp.price.toLocaleString(LOCALE) + ' грн. Разова оплата зірками Telegram, без автопродовження: коли підписка закінчиться, продовжиш одним дотиком.', '≈ ' + sp.price.toLocaleString(LOCALE) + ' грн. Разовая оплата звёздами Telegram, без автопродления: когда подписка закончится, продлишь одним касанием.') + '</p>' +
+      '<p class="muted small" style="text-align:center;margin:6px 0 0;opacity:.75">' + T2('Оплата карткою з’явиться незабаром.', 'Оплата картой появится в ближайшее время.') + '</p>'
+      ));
   } else if (SHEET.t === 'settings') {
-    body = '<h2>' + (tgName ? esc(tgName) : __(1403,'Профіль')) + '</h2><p class="muted" style="margin:0 0 8px">' + (S.premium ? __(1382,'Підписка активна') + (S.premiumUntil ? __(1015,' до ') + fmtDate(S.premiumUntil) : '') : trialText()) + '</p>' +
-      (S.premium ? '' : __(1404,'<button class="list-btn" data-a="paywall">Оформити підписку</button>')) +
+    body = '<h2>' + (tgName ? esc(tgName) : __(1403,'Профіль')) + '</h2><p class="muted" style="margin:0 0 8px">' + (premiumOn() ? __(1382,'Підписка активна') + (S.premiumUntil ? __(1015,' до ') + fmtDate(S.premiumUntil) : '') : trialText()) + '</p>' +
+      (premiumOn() ? '' : __(1404,'<button class="list-btn" data-a="paywall">Оформити підписку</button>')) +
       __(1405,'<button class="list-btn" data-a="remind">Нагадування</button>') +
       __(1406,'<button class="list-btn" data-a="replan">Пройти анкету заново</button>') +
-      __(1407,'<button class="list-btn" data-a="demo">Заповнити прикладом (для показу)</button>') +
-      __(1408,'<button class="list-btn" data-a="nextstage">Перейти до наступного етапу (для показу)</button>') +
-      __(1409,'<button class="list-btn" data-a="endtrial">Завершити безкоштовний період (для показу)</button>') +
+      (tg ? '' : __(1407,'<button class="list-btn" data-a="demo">Заповнити прикладом (для показу)</button>')) +
+      (tg ? '' : __(1408,'<button class="list-btn" data-a="nextstage">Перейти до наступного етапу (для показу)</button>')) +
+      (tg ? '' : __(1409,'<button class="list-btn" data-a="endtrial">Завершити безкоштовний період (для показу)</button>')) +
       __(1410,'<button class="list-btn danger" data-a="reset">Видалити всі дані</button>');
   } else if (SHEET.t === 'confirmreset') {
     body = __(1411,'<h2>Видалити всі дані?</h2><p class="muted">Програма, тренування й записи ваги зникнуть з цього пристрою.</p><button class="btn btn-main" data-a="doreset">Видалити</button><button class="btn" data-a="close" style="margin-top:6px">Скасувати</button>');
@@ -3602,9 +3609,10 @@ var A = {
   buy:function(){
     var sel = (SHEET && SHEET.plan) || 'm3', link = PAY_LINKS[sel];
     if (link) { try { if (tg && tg.openLink) tg.openLink(link); else window.open(link, '_blank'); } catch(e){} return; }
+    if (tg) { toast(T2('Оплата карткою з’явиться незабаром', 'Оплата картой появится в ближайшее время')); return; }
     A.activate(sel);
   },
-  buystars:function(){ A.activate((SHEET && SHEET.plan) || 'm3'); },
+  buystars:function(){ buyStars((SHEET && SHEET.plan) || 'm3'); },
   activate:function(sel){
     var p = PLANS.filter(function(x){ return x.id === sel; })[0], from = Math.max(Date.now(), S.premiumUntil || 0);
     S.premium = true; S.plan = sel; S.premiumUntil = from + p.months * 30 * DAY; save(); SHEET = null; haptic('heavy'); ANIM = false; render(); toast(__(1416,'Підписку «') + p.n + __(1417,'» активовано'));
@@ -3760,6 +3768,66 @@ function serverSync(){
       .then(function(r){ if (r.ok) { try { localStorage.setItem('tyaga_sync', sig); } catch(e){} } }).catch(function(){});
   } catch(e){}
 }
+function T2(uk, ru){ return LANG === 'ru' ? ru : uk; }
+function apiPost(path, data, signal){
+  return fetch(API_URL.replace(/\/$/, '') + path, { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(Object.assign({ initData:tg.initData }, data || {})), signal:signal })
+    .then(function(r){ return r.json().catch(function(){ return null; }).then(function(d){ return { ok:r.ok, status:r.status, data:d }; }); });
+}
+function tgPayOK(){ return !!(API_URL && tg && tg.initData && tg.openInvoice); }
+function coachAvailable(){ return !!SAMPLE || !!(API_URL && tg && tg.initData); }
+function serverStatus(){
+  if (!API_URL || !tg || !tg.initData) return;
+  apiPost('/api/status').then(function(r){
+    var d = r.data; if (!r.ok || !d || !d.ok) return;
+    var active = d.until > Date.now();
+    if (active !== !!S.premium || (d.until || 0) !== (S.premiumUntil || 0)) {
+      S.premium = active; S.premiumUntil = d.until || 0; if (d.plan) S.plan = d.plan; save(); if (!COACH && !FINISH) render();
+    }
+  }).catch(function(){});
+}
+function buyStars(sel){
+  if (!tgPayOK()) { A.activate(sel); return; }
+  toast(T2('Готуємо оплату…', 'Готовим оплату…'));
+  apiPost('/api/invoice', { plan:sel, lang:LANG }).then(function(r){
+    if (!r.ok || !r.data || !r.data.link) { toast(T2('Не вдалося створити оплату. Спробуй ще раз', 'Не удалось создать оплату. Попробуй ещё раз')); return; }
+    tg.openInvoice(r.data.link, function(status){
+      if (status === 'paid') {
+        SHEET = null; renderLayer(); haptic('heavy');
+        toast(T2('Оплата пройшла! Активуємо підписку…', 'Оплата прошла! Активируем подписку…'));
+        setTimeout(serverStatus, 1500); setTimeout(serverStatus, 5000); setTimeout(serverStatus, 12000);
+      } else if (status === 'failed') toast(T2('Оплата не пройшла', 'Оплата не прошла'));
+    });
+  }).catch(function(){ toast(T2('Немає зв’язку із сервером', 'Нет связи с сервером')); });
+}
+function serverCoach(msg, ctl){
+  var hist = S.chat.filter(function(m){ return (m.role === 'user' || m.role === 'assistant') && m.content && !m.err && m !== msg; }).slice(-16);
+  while (hist.length && hist[0].role !== 'user') hist.shift();
+  var messages = [];
+  hist.forEach(function(m){ var l = messages[messages.length - 1]; if (l && l.role === m.role) l.content += '\n\n' + m.content; else messages.push({ role:m.role, content:m.content }); });
+  var tools = coachTools(), defs = tools.map(function(t){ return { name:t.name, description:t.description, input_schema:t.inputSchema }; });
+  var system = coachRules(), round = 0;
+  function step(){
+    return apiPost('/api/coach', { system:system, messages:messages, tools:defs }, ctl.signal).then(function(r){
+      var d = r.data;
+      if (!r.ok || !d || !d.ok) { var e = new Error('coach'); e.code = (d && d.error === 'limit') ? 'rate_limited' : 'server'; throw e; }
+      var text = (d.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('\n').trim();
+      if (text) { msg.content = text; var el = document.getElementById('live'); if (el) el.innerHTML = fmtMsg(text); scrollChat(); }
+      if (d.stop_reason !== 'tool_use' || ++round >= 4) return { text:msg.content || text || '' };
+      messages.push({ role:'assistant', content:d.content });
+      var uses = d.content.filter(function(b){ return b.type === 'tool_use'; });
+      return Promise.all(uses.map(function(b){
+        var t = tools.filter(function(x){ return x.name === b.name; })[0];
+        return Promise.resolve().then(function(){ if (!t) throw new Error('unknown tool'); return t.execute(b.input || {}); })
+          .then(function(out){ return { type:'tool_result', tool_use_id:b.id, content:JSON.stringify(out) }; },
+                function(err){ return { type:'tool_result', tool_use_id:b.id, content:String((err && err.message) || err), is_error:true }; });
+      })).then(function(results){ messages.push({ role:'user', content:results }); return step(); });
+    }, function(err){
+      if (err && err.name === 'AbortError') { var e = new Error('cancelled'); e.code = 'cancelled'; e.text = msg.content; throw e; }
+      throw err;
+    });
+  }
+  return step();
+}
 function syncQueue(){ if (!API_URL) return; clearTimeout(SYNC_T); SYNC_T = setTimeout(serverSync, 2500); }
 
 /* ---------- Хмарне сховище Telegram ---------- */
@@ -3821,6 +3889,7 @@ if (S.profile && !S.legal) SHEET = { t:'consent', agree:false };
 render();
 cloudLoad();
 setTimeout(serverSync, 3000);
+setTimeout(serverStatus, 1500);
 })();
 
 </script>
